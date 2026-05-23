@@ -78,7 +78,7 @@ rkdeveloptool wl 0x0 rk3576_ddr_train.bin  # write DDR trainer
 rkdeveloptool rd                            # run
 ```
 
-`rk3576_loader.bin` is the miniloader from the `rkbin` repo — the same one used
+`rk3576_loader.bin` is the miniloader from the `rkbin` repo - the same one used
 during blob extraction. The trainer replaces only the DDR init stage; everything
 else in the boot chain is unchanged.
 
