@@ -39,14 +39,75 @@ After this returns successfully, the full DDR address space is available and the
 
 ---
 
+## Building
+
+### Prerequisites
+
+An AArch64 bare-metal cross-compiler. On Debian/Ubuntu:
+
+```bash
+apt install gcc-aarch64-linux-gnu
+```
+
+Or download directly from [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads).
+If your toolchain prefix differs from `aarch64-linux-gnu-`, override it:
+
+```bash
+make CROSS_COMPILE=aarch64-none-elf-
+```
+
+### Compile
+
+```bash
+make          # produces rk3576_ddr_train.elf and rk3576_ddr_train.bin
+make size     # check it fits in the 256 KiB SRAM budget
+make disasm   # optional: disassemble to rk3576_ddr_train.S for inspection
+```
+
+The binary loads into System SRAM at `0xFF100000` and must not exceed ~248 KiB
+(256 KiB region minus 8 KiB stack).
+
+### Flashing
+
+The `.bin` is loaded by the RK3576 maskrom via `rkdeveloptool`:
+
+```bash
+# Put the board into maskrom mode (hold MASKROM button while powering on)
+rkdeveloptool db rk3576_loader.bin          # download boot stub
+rkdeveloptool wl 0x0 rk3576_ddr_train.bin  # write DDR trainer
+rkdeveloptool rd                            # run
+```
+
+`rk3576_loader.bin` is the miniloader from the `rkbin` repo — the same one used
+during blob extraction. The trainer replaces only the DDR init stage; everything
+else in the boot chain is unchanged.
+
+### Adapting for Different DRAM
+
+Geometry is configured in `rk3576_ddr_board.c`. The defaults match an 8 Gb
+LPDDR4X die in x32 configuration (4 GiB per channel). If your board differs:
+
+| Field | Meaning |
+|-------|---------|
+| `col_bits` | Column address bits (typically 10) |
+| `row_bits` | Row address bits (14–17 depending on density) |
+| `bank_bits` | Banks (3 = 8 banks, standard for LPDDR4X) |
+| `size_mb` | Capacity per channel in MiB |
+| `ranks` / `cs_map` | Single rank = 1 / 0x1 · dual rank = 2 / 0x3 |
+
+---
+
 ## Files
 
-|      File      |                    Description                       |
-|----------------|------------------------------------------------------|
-| `ddr_init.c`   | Main initialization entry point and sequencing       |
-| `ddr_phy.c`    | PHY configuration and calibration routines           |
-| `ddr_timing.c` | Timing parameter tables derived from blob extraction |
-| `ddr_bist.c`   | Hardware BIST pattern test                           |
+| File | Description |
+|------|-------------|
+| `rk3576_ddr_train.c` | Entry point, sequencing, ZQ / CA / write-level / gate / deskew / VREF / BIST |
+| `rk3576_ddr_board.c` | Board-level config: FSP table, geometry, ODT threshold, `udelay()` |
+| `rk3576_ddr.h` | Top-level structs, enums, memory map, public API |
+| `rk3576_ddr_regs.h` | Raw register definitions for DDRMC, DDRPHY, DDRGRF, MSCH, CRU |
+| `rk3576_ddr_timing.h` | JEDEC timing tables for LPDDR4/4X, LPDDR5, DDR4; lookup function |
+| `rk3576_ddr_train.ld` | Linker script — places trainer at SRAM `0xFF100000`, 8 KiB stack |
+| `Makefile` | Cross-compile build system (`aarch64-linux-gnu-gcc`, bare-metal flags) |
 
 ---
 
